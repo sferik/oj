@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 3.17.7 - unreleased
+
+- Fixed issue #1105, where `Oj.dump` with an Integer `:indent` in compat or custom mode with `use_to_json` raised `TypeError` from the json gem, whose `indent` is a String, for any object whose `to_json` comes from the json gem. Nested values reach `to_json` even without `use_to_json`, so a `Time` inside an Array failed the same way. The hash `to_json` receives now carries the indent as that many spaces. The caller's hash is not modified.
+
 ## 3.17.6 - 2026-08-10
 
 - Fixed issue #1092, where the encoder ActiveSupport 8.1 caches with `escape: false` froze the options as they stood before `set_encoder` wrote `time_precision` into them, so `to_json(escape: false)` emitted 9 fractional digits. An options hash that names no option Oj knows no longer detaches an encoder from the defaults. (#1093)

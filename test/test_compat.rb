@@ -46,6 +46,15 @@ class CompatJuice < Minitest::Test
     end
   end # Argy
 
+  class ArgKeeper
+    attr_reader :args
+
+    def to_json(*a)
+      @args = a
+      '{}'
+    end
+  end # ArgKeeper
+
   class Rex
     attr_accessor :s
 
@@ -571,6 +580,54 @@ class CompatJuice < Minitest::Test
   def test_arg_passing
     json = Oj.to_json(Argy.new(), :max_nesting => 40)
     assert_match(/.*max_nesting.*40.*/, json)
+  end
+
+  # Oj.dump forwards its options hash to to_json. Oj's :indent is an Integer
+  # while the json gem's is a String, and the json gem raises TypeError on an
+  # Integer, so to_json has to receive the indent as a String of spaces.
+  def test_dump_to_json_args_indent_as_string
+    keeper = ArgKeeper.new
+    opts = { :mode => :compat, :use_to_json => true, :indent => 2 }
+    Oj.dump(keeper, opts)
+    assert_equal('  ', keeper.args[0][:indent])
+    # The caller's hash is left alone.
+    assert_equal(2, opts[:indent])
+  end
+
+  def test_dump_to_json_args_indent_zero_as_empty_string
+    keeper = ArgKeeper.new
+    Oj.dump(keeper, :mode => :compat, :use_to_json => true, :indent => 0)
+    assert_equal('', keeper.args[0][:indent])
+  end
+
+  def test_dump_to_json_args_indent_string_untouched
+    keeper = ArgKeeper.new
+    Oj.dump(keeper, :mode => :compat, :use_to_json => true, :indent => "\t")
+    assert_equal("\t", keeper.args[0][:indent])
+  end
+
+  def test_dump_to_json_args_same_hash_without_integer_indent
+    keeper = ArgKeeper.new
+    opts = { :mode => :compat, :use_to_json => true, :indent => nil }
+    Oj.dump(keeper, opts)
+    assert_same(opts, keeper.args[0])
+    opts = { :mode => :compat, :use_to_json => true }
+    Oj.dump(keeper, opts)
+    assert_same(opts, keeper.args[0])
+  end
+
+  # Nested values are handed to to_json whether or not use_to_json is set,
+  # so the indent they receive has to be converted as well.
+  def test_dump_to_json_args_indent_nested_without_use_to_json
+    keeper = ArgKeeper.new
+    Oj.dump([keeper], :mode => :compat, :indent => 2)
+    assert_equal('  ', keeper.args[0][:indent])
+  end
+
+  def test_dump_to_json_args_indent_custom_mode
+    keeper = ArgKeeper.new
+    Oj.dump(keeper, :mode => :custom, :use_to_json => true, :indent => 2)
+    assert_equal('  ', keeper.args[0][:indent])
   end
 
   def test_max_nesting

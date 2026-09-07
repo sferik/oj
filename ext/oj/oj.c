@@ -1663,6 +1663,34 @@ static VALUE safe_load(VALUE self, VALUE doc) {
  * - *io* [_IO__|_String_] IO Object to read from
  */
 
+// Oj's :indent is an Integer count of spaces while the json gem's is the
+// String to indent with. Oj.dump() forwards its options hash to the to_json
+// methods it calls in compat and custom mode, and the json gem's generator
+// raises TypeError on an Integer indent, so a Time or any other object whose
+// to_json comes from the json gem could not be dumped with indent: 2. Return
+// ropts itself unless its :indent is an Integer, and otherwise a copy of it
+// with :indent as that many spaces. ropts is never modified.
+static VALUE stringify_indent_option(VALUE ropts) {
+    VALUE indent = rb_hash_lookup2(ropts, oj_indent_sym, Qundef);
+    VALUE copy;
+    VALUE str;
+    long  cnt;
+
+    if (Qundef == indent || !FIXNUM_P(indent)) {
+        return ropts;
+    }
+    cnt = FIX2LONG(indent);
+    if (0 > cnt) {
+        cnt = 0;
+    }
+    str = rb_str_new(NULL, cnt);
+    memset(RSTRING_PTR(str), ' ', cnt);
+    copy = rb_hash_dup(ropts);
+    rb_hash_aset(copy, oj_indent_sym, str);
+
+    return copy;
+}
+
 struct dump_arg {
     struct _out     *out;
     struct _options *copts;
@@ -1703,6 +1731,7 @@ static VALUE dump(int argc, VALUE *argv, VALUE self) {
     struct dump_arg arg;
     struct _out     out;
     struct _options copts = oj_default_options;
+    VALUE           to_json_argv[2];
 
     if (1 > argc) {
         rb_raise(rb_eArgError, "wrong number of arguments (0 for 1).");
@@ -1720,6 +1749,16 @@ static VALUE dump(int argc, VALUE *argv, VALUE self) {
     arg.copts = &copts;
     arg.argc  = argc;
     arg.argv  = argv;
+    // The options hash is also what to_json receives, so hand it an indent
+    // in the form the json gem takes. Compat mode hands every nested value
+    // to to_json whether or not use_to_json is set, so the check is on the
+    // mode rather than on the flag. Only the modes that call to_json pay for
+    // the copy.
+    if (2 == argc && (CompatMode == copts.mode || CustomMode == copts.mode) && T_HASH == rb_type(argv[1])) {
+        to_json_argv[0] = argv[0];
+        to_json_argv[1] = stringify_indent_option(argv[1]);
+        arg.argv        = to_json_argv;
+    }
 
     oj_out_init(arg.out);
 
