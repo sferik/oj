@@ -1663,17 +1663,22 @@ static VALUE safe_load(VALUE self, VALUE doc) {
  * - *io* [_IO__|_String_] IO Object to read from
  */
 
+// MAX_INDENT spaces. oj_parse_options() has already raised on an Integer
+// :indent above MAX_INDENT by the time stringify_indent_option() runs, so a
+// String indent is always a prefix of this.
+static const char indent_spaces[] = "                ";
+
 // Oj's :indent is an Integer count of spaces while the json gem's is the
 // String to indent with. Oj.dump() forwards its options hash to the to_json
 // methods it calls in compat and custom mode, and the json gem's generator
 // raises TypeError on an Integer indent, so a Time or any other object whose
 // to_json comes from the json gem could not be dumped with indent: 2. Return
 // ropts itself unless its :indent is an Integer, and otherwise a copy of it
-// with :indent as that many spaces. ropts is never modified.
+// with :indent as that many spaces. ropts is never modified. A negative count
+// becomes an empty String, which is how Oj itself indents with it.
 static VALUE stringify_indent_option(VALUE ropts) {
     VALUE indent = rb_hash_lookup2(ropts, oj_indent_sym, Qundef);
     VALUE copy;
-    VALUE str;
     long  cnt;
 
     if (Qundef == indent || !FIXNUM_P(indent)) {
@@ -1682,11 +1687,11 @@ static VALUE stringify_indent_option(VALUE ropts) {
     cnt = FIX2LONG(indent);
     if (0 > cnt) {
         cnt = 0;
+    } else if ((long)sizeof(indent_spaces) - 1 < cnt) {
+        cnt = sizeof(indent_spaces) - 1;
     }
-    str = rb_str_new(NULL, cnt);
-    memset(RSTRING_PTR(str), ' ', cnt);
     copy = rb_hash_dup(ropts);
-    rb_hash_aset(copy, oj_indent_sym, str);
+    rb_hash_aset(copy, oj_indent_sym, rb_str_new(indent_spaces, cnt));
 
     return copy;
 }

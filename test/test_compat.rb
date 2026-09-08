@@ -600,6 +600,19 @@ class CompatJuice < Minitest::Test
     assert_equal('', keeper.args[0][:indent])
   end
 
+  def test_dump_to_json_args_indent_max_as_spaces
+    keeper = ArgKeeper.new
+    Oj.dump(keeper, :mode => :compat, :use_to_json => true, :indent => 16)
+    assert_equal(' ' * 16, keeper.args[0][:indent])
+  end
+
+  # Oj treats a negative indent as no indent.
+  def test_dump_to_json_args_indent_negative_as_empty_string
+    keeper = ArgKeeper.new
+    Oj.dump(keeper, :mode => :compat, :use_to_json => true, :indent => -2)
+    assert_equal('', keeper.args[0][:indent])
+  end
+
   def test_dump_to_json_args_indent_string_untouched
     keeper = ArgKeeper.new
     Oj.dump(keeper, :mode => :compat, :use_to_json => true, :indent => "\t")
